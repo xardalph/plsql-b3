@@ -1,0 +1,53 @@
+DROP TABLE destinataires;
+DROP TABLE text_mail;
+DROP TABLE dest_mail;
+DROP TABLE log;
+DROP TABLE TMAILS_SEND_HISTO;
+
+CREATE TABLE destinataires (
+    id INT GENERATED ALWAYS AS IDENTITY,
+    email varchar(255),
+    nom varchar(255),
+    age int
+    );
+    
+    
+CREATE TABLE  text_mail (
+    id INT GENERATED ALWAYS AS IDENTITY,
+    objet varchar(255),
+    texte varchar(255)
+);
+CREATE TABLE dest_mail (
+    id INT GENERATED ALWAYS AS IDENTITY,
+    typedest varchar(255),
+    CONSTRAINT check_dest_mail_type CHECK (typedest IN ('CC', 'To', 'BCC'))
+);
+CREATE TABLE log (
+    id INT GENERATED ALWAYS AS IDENTITY,
+    date datetime,
+    message varchar(255)
+);
+CREATE TABLE TMAILS_SEND_HISTO (
+    id INT GENERATED ALWAYS AS IDENTITY,
+    date datetime,
+    idmail INT,
+    status boolean,
+    CONSTRAINT mail_fk FOREIGN KEY (idmail) REFERENCES text_mail(id)
+);
+
+
+
+CREATE OR REPLACE PACKAGE package_structures AS
+    EMAIL_EXCEPTION EXCEPTION;
+    TYPE RMAIL IS RECORD (sujet VARCHAR2(50), texte VARCHAR2(255), destTo VARCHAR2(255), destCC VARCHAR(255) ) ;
+    PROCEDURE createMails(
+    
+    
+    PROCEDURE lister_structures_pkg(est_Asso IN VUE_STRUCTURES.ESTASSO%TYPE, nbStructuresSecteurs OUT INT);
+    FUNCTION nbSecteurs_pkg(idStructure VUE_STRUCTURES.ID_STRUCTURE%TYPE) RETURN INT;
+	structureException EXCEPTION;
+	TYPE person IS RECORD (nom VARCHAR2(50), prenom VARCHAR2(50), age INTEGER) ;
+	TYPE tabPerson IS TABLE OF person INDEX BY binary_integer;
+    PROCEDURE displayPersons(persons IN tabPerson);
+END package_structures;
+/
