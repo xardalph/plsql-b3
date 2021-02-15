@@ -39,9 +39,10 @@ CREATE TABLE TMAILS_SEND_HISTO (
 
 CREATE OR REPLACE PACKAGE package_structures AS
     EMAIL_EXCEPTION EXCEPTION;
-    TYPE RMAIL IS RECORD (sujet VARCHAR2(50), texte VARCHAR2(255), destTo VARCHAR2(255), destCC VARCHAR(255) ) ;
-    PROCEDURE createMails(
-    
+    TYPE RMAIL IS RECORD (sujet VARCHAR2(50), texte VARCHAR2(255), destTo VARCHAR2(255), destCC VARCHAR(255), destBCC VARCHAR(255) );
+    TYPE TAB_RMAIL IS TABLE OF RMAIL;
+    PROCEDURE createMails(TAB IN TAB_RMAIL);
+    PROCEDURE checkMail(id IN INT);
     
     PROCEDURE lister_structures_pkg(est_Asso IN VUE_STRUCTURES.ESTASSO%TYPE, nbStructuresSecteurs OUT INT);
     FUNCTION nbSecteurs_pkg(idStructure VUE_STRUCTURES.ID_STRUCTURE%TYPE) RETURN INT;
@@ -51,3 +52,4 @@ CREATE OR REPLACE PACKAGE package_structures AS
     PROCEDURE displayPersons(persons IN tabPerson);
 END package_structures;
 /
+
