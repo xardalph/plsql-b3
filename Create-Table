@@ -1,7 +1,8 @@
+
 DROP TABLE destinataires;
-DROP TABLE text_mail;
+DROP TABLE mail;
 DROP TABLE dest_mail;
-DROP TABLE log;
+DROP TABLE TMAILS_LOGS;
 DROP TABLE TMAILS_SEND_HISTO;
 
 CREATE TABLE destinataires (
@@ -12,7 +13,7 @@ CREATE TABLE destinataires (
     );
     
     
-CREATE TABLE  text_mail (
+CREATE TABLE  mail (
     id INT GENERATED ALWAYS AS IDENTITY,
     objet varchar(255),
     texte varchar(255)
@@ -20,22 +21,23 @@ CREATE TABLE  text_mail (
 CREATE TABLE dest_mail (
     id INT GENERATED ALWAYS AS IDENTITY,
     typedest varchar(255),
+    idmail INT,
+    email varchar(255),
+    CONSTRAINT mail_fk FOREIGN KEY (idmail) REFERENCES mail(id),
     CONSTRAINT check_dest_mail_type CHECK (typedest IN ('CC', 'To', 'BCC'))
 );
-CREATE TABLE log (
+CREATE TABLE TMAILS_LOGS (
     id INT GENERATED ALWAYS AS IDENTITY,
     date datetime,
     message varchar(255)
 );
 CREATE TABLE TMAILS_SEND_HISTO (
     id INT GENERATED ALWAYS AS IDENTITY,
-    date datetime,
     idmail INT,
+    date datetime,
     status boolean,
-    CONSTRAINT mail_fk FOREIGN KEY (idmail) REFERENCES text_mail(id)
+    CONSTRAINT mail_fk FOREIGN KEY (idmail) REFERENCES mail(id)
 );
-
-
 
 CREATE OR REPLACE PACKAGE package_structures AS
     EMAIL_EXCEPTION EXCEPTION;
@@ -44,12 +46,63 @@ CREATE OR REPLACE PACKAGE package_structures AS
     PROCEDURE createMails(TAB IN TAB_RMAIL);
     PROCEDURE checkMail(id IN INT);
     
-    PROCEDURE lister_structures_pkg(est_Asso IN VUE_STRUCTURES.ESTASSO%TYPE, nbStructuresSecteurs OUT INT);
-    FUNCTION nbSecteurs_pkg(idStructure VUE_STRUCTURES.ID_STRUCTURE%TYPE) RETURN INT;
-	structureException EXCEPTION;
-	TYPE person IS RECORD (nom VARCHAR2(50), prenom VARCHAR2(50), age INTEGER) ;
-	TYPE tabPerson IS TABLE OF person INDEX BY binary_integer;
-    PROCEDURE displayPersons(persons IN tabPerson);
+  
 END package_structures;
 /
 
+CREATE OR REPLACE PROCEDURE send_mail (p_to        IN VARCHAR2,
+                                       p_from      IN VARCHAR2,
+                                       p_message   IN VARCHAR2,
+                                       p_smtp_host IN VARCHAR2,
+                                       p_smtp_port IN NUMBER DEFAULT 25)
+AS
+  l_mail_conn   UTL_SMTP.connection;
+  l_smtp_host VARCHAR2;
+  l_smtp_port VARCHAR2;
+  
+  CURSOR c_mail(IDMAIL INT) IS 
+  SELECT * from mail WHERE id =IDMAIL;
+  
+  CURSOR c_dest(IDMAIL INT) IS 
+  SELECT * FROM dest_mail where idmail = IDMAIL; 
+  
+BEGIN
+    l_mail_conn := UTL_SMTP.open_connection(l_smtp_host, l_smtp_port);
+    for mail in c_mail(IDMAIL)
+    LOOP
+    UTL_SMTP.write_data(l_mail_conn, 'Date: ' || TO_CHAR(SYSDATE, 'DD-MON-YYYY HH24:MI:SS') || UTL_TCP.crlf);
+    UTL_SMTP.helo(l_mail_conn, l_smtp_host);
+    
+    UTL_SMTP.mail(l_mail_conn, p_from); -- TODO
+    
+        FOR dest in c_dest(IDMAIL)
+        LOOP
+        UTL_SMTP.rcpt(l_mail_conn, dest.email);
+        
+        IF dest.typedest = 'TO' THEN
+    
+            UTL_SMTP.write_data(l_mail_conn, 'To: ' || dest.email || UTL_TCP.crlf);
+        ELSIF dest.typedest = 'CC' THEN
+             UTL_SMTP.write_data(l_mail_conn, 'CC: ' || REPLACE(p_cc, ',', ';') || UTL_TCP.crlf);
+        
+        END IF;
+        
+        
+        UTL_SMTP.data(l_mail_conn, p_message || UTL_TCP.crlf || UTL_TCP.crlf);
+        UTL_SMTP.quit(l_mail_conn);
+        END LOOP;
+    END LOOP;
+    
+  EXCEPTION
+ WHEN utl_smtp.Transient_Error OR utl_smtp.Permanent_Error then
+   raise_application_error(-20000, 'Unable to send mail', TRUE);
+END;
+/
+
+BEGIN
+  send_mail(p_to        => 'me@mycompany.com',
+            p_from      => 'admin@mycompany.com',
+            p_message   => 'This is a test message.',
+            p_smtp_host => 'smtp.mycompany.com');
+END;
+/
