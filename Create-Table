@@ -1,28 +1,7 @@
-DROP TABLE destinataires;
+
 DROP TABLE TMAIL;
-DROP TABLE dest_mail;
 DROP TABLE TMAILS_LOGS;
 DROP TABLE TMAILS_SEND_HISTO;
-
-
--- table inutile celon le sujet, indiqué comme à faire à l'oral par le prof
-CREATE TABLE dest_mail (
-    id INT GENERATED ALWAYS AS IDENTITY,
-    typedest varchar(255),
-    idmail INT,
-    email varchar(255),
-    CONSTRAINT mail_fk FOREIGN KEY (idmail) REFERENCES mail(id),
-    CONSTRAINT check_dest_mail_type CHECK (typedest IN ('CC', 'To', 'BCC'))
-);
-
-
-CREATE TABLE destinataires (
-    id INT GENERATED ALWAYS AS IDENTITY,
-    email varchar(255),
-    nom varchar(255),
-    age int
-    );
-    
     
 CREATE TABLE  TMAIL (
     id INT GENERATED ALWAYS AS IDENTITY,
@@ -30,24 +9,28 @@ CREATE TABLE  TMAIL (
     texte varchar(255),
     destTo VARCHAR2(255), 
     destCC VARCHAR(255), 
-    destBCC VARCHAR(255)
+    destBCC VARCHAR(255),
+    dateEnvoi TIMESTAMP
 );
+
 CREATE TABLE TMAILS_LOGS (
     id INT GENERATED ALWAYS AS IDENTITY,
-    date datetime,
-    message varchar(255)
+    dateEnvoi TIMESTAMP,
+    message VARCHAR2(255)
 );
+
+
 CREATE TABLE TMAILS_SEND_HISTO (
     id INT GENERATED ALWAYS AS IDENTITY,
     idmail INT,
-    date datetime,
-    status boolean,
-    CONSTRAINT mail_fk FOREIGN KEY (idmail) REFERENCES mail(id)
+    dateEnvoi TIMESTAMP,
+    statusEnvoi  NUMBER(1,0),
+    CONSTRAINT mail_fk FOREIGN KEY (idmail) REFERENCES TMAIL(id)
 );
 
 CREATE OR REPLACE PACKAGE package_structures AS
     EMAIL_EXCEPTION EXCEPTION;
-    TYPE RMAIL IS RECORD (objet VARCHAR2(50), texte VARCHAR2(255), destTo VARCHAR2(255), destCC VARCHAR(255), destBCC VARCHAR(255) );
+    TYPE RMAIL IS RECORD (objet VARCHAR2(50), texte VARCHAR2(255), destTo VARCHAR2(255), destCC VARCHAR(255), destBCC VARCHAR(255), dateEnvoi TIMESTAMP);
     TYPE TAB_RMAIL IS TABLE OF RMAIL;
     PROCEDURE createMails(mail in RMAIL);
     PROCEDURE checkMail(idMail in INT);
@@ -167,6 +150,16 @@ EXCEPTION
     THEN raise_application_error(-20307, 'Email inconnu', TRUE);
 END;
 
+PROCEDURE cleanMails(
+    dateMax in DATETIME
+)
+IS
+BEGIN
+    DELETE 
+    FROM TMAILS_SEND_HISTO
+    WHERE dateMax > TMAILS_SEND_HISTO.date
+    ;
+END;
 
 
 END;
