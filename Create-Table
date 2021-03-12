@@ -10,13 +10,15 @@ CREATE TABLE  TMAIL (
     destTo VARCHAR2(255), 
     destCC VARCHAR(255), 
     destBCC VARCHAR(255),
-    dateEnvoi TIMESTAMP
+    dateEnvoi TIMESTAMP,
+    PRIMARY KEY (id)
 );
 
 CREATE TABLE TMAILS_LOGS (
     id INT GENERATED ALWAYS AS IDENTITY,
     dateEnvoi TIMESTAMP,
-    message VARCHAR2(255)
+    message VARCHAR2(255),
+    PRIMARY KEY (id)
 );
 
 
@@ -25,7 +27,8 @@ CREATE TABLE TMAILS_SEND_HISTO (
     idmail INT,
     dateEnvoi TIMESTAMP,
     statusEnvoi  NUMBER(1,0),
-    CONSTRAINT mail_fk FOREIGN KEY (idmail) REFERENCES TMAIL(id)
+    CONSTRAINT mail_fk FOREIGN KEY (idmail) REFERENCES TMAIL(id),
+    PRIMARY KEY (id)
 );
 
 CREATE OR REPLACE PACKAGE package_structures AS
