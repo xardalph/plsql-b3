@@ -1,9 +1,20 @@
-
 DROP TABLE destinataires;
-DROP TABLE mail;
+DROP TABLE TMAIL;
 DROP TABLE dest_mail;
 DROP TABLE TMAILS_LOGS;
 DROP TABLE TMAILS_SEND_HISTO;
+
+
+-- table inutile celon le sujet, indiqué comme à faire à l'oral par le prof
+CREATE TABLE dest_mail (
+    id INT GENERATED ALWAYS AS IDENTITY,
+    typedest varchar(255),
+    idmail INT,
+    email varchar(255),
+    CONSTRAINT mail_fk FOREIGN KEY (idmail) REFERENCES mail(id),
+    CONSTRAINT check_dest_mail_type CHECK (typedest IN ('CC', 'To', 'BCC'))
+);
+
 
 CREATE TABLE destinataires (
     id INT GENERATED ALWAYS AS IDENTITY,
@@ -13,18 +24,13 @@ CREATE TABLE destinataires (
     );
     
     
-CREATE TABLE  mail (
+CREATE TABLE  TMAIL (
     id INT GENERATED ALWAYS AS IDENTITY,
     objet varchar(255),
-    texte varchar(255)
-);
-CREATE TABLE dest_mail (
-    id INT GENERATED ALWAYS AS IDENTITY,
-    typedest varchar(255),
-    idmail INT,
-    email varchar(255),
-    CONSTRAINT mail_fk FOREIGN KEY (idmail) REFERENCES mail(id),
-    CONSTRAINT check_dest_mail_type CHECK (typedest IN ('CC', 'To', 'BCC'))
+    texte varchar(255),
+    destTo VARCHAR2(255), 
+    destCC VARCHAR(255), 
+    destBCC VARCHAR(255)
 );
 CREATE TABLE TMAILS_LOGS (
     id INT GENERATED ALWAYS AS IDENTITY,
@@ -41,68 +47,127 @@ CREATE TABLE TMAILS_SEND_HISTO (
 
 CREATE OR REPLACE PACKAGE package_structures AS
     EMAIL_EXCEPTION EXCEPTION;
-    TYPE RMAIL IS RECORD (sujet VARCHAR2(50), texte VARCHAR2(255), destTo VARCHAR2(255), destCC VARCHAR(255), destBCC VARCHAR(255) );
+    TYPE RMAIL IS RECORD (objet VARCHAR2(50), texte VARCHAR2(255), destTo VARCHAR2(255), destCC VARCHAR(255), destBCC VARCHAR(255) );
     TYPE TAB_RMAIL IS TABLE OF RMAIL;
-    PROCEDURE createMails(TAB IN TAB_RMAIL);
-    PROCEDURE checkMail(id IN INT);
+    PROCEDURE createMails(mail in RMAIL);
+    PROCEDURE checkMail(idMail in INT);
     
   
 END package_structures;
 /
 
-CREATE OR REPLACE PROCEDURE send_mail (p_to        IN VARCHAR2,
-                                       p_from      IN VARCHAR2,
-                                       p_message   IN VARCHAR2,
+
+CREATE OR REPLACE PACKAGE BODY package_structures AS
+
+ PROCEDURE send_mail (p_from      IN VARCHAR2,
                                        p_smtp_host IN VARCHAR2,
                                        p_smtp_port IN NUMBER DEFAULT 25)
 AS
   l_mail_conn   UTL_SMTP.connection;
-  l_smtp_host VARCHAR2;
-  l_smtp_port VARCHAR2;
+  l_smtp_host VARCHAR2(255);
+  l_smtp_port VARCHAR2(255);
+  IDMAIL INT;
   
   CURSOR c_mail(IDMAIL INT) IS 
-  SELECT * from mail WHERE id =IDMAIL;
+  SELECT * from TMAIL WHERE id = IDMAIL;
   
-  CURSOR c_dest(IDMAIL INT) IS 
-  SELECT * FROM dest_mail where idmail = IDMAIL; 
+  
+  
+PROCEDURE process_recipients(p_mail_conn IN OUT UTL_SMTP.connection,
+                               p_list      IN     VARCHAR2)
+  AS
+    l_tab string_api.t_split_array;
+  BEGIN
+    IF TRIM(p_list) IS NOT NULL THEN
+      l_tab := string_api.split_text(p_list);
+      FOR i IN 1 .. l_tab.COUNT LOOP
+        UTL_SMTP.rcpt(p_mail_conn, TRIM(l_tab(i)));
+      END LOOP;
+    END IF;
+  END;
   
 BEGIN
     l_mail_conn := UTL_SMTP.open_connection(l_smtp_host, l_smtp_port);
-    for mail in c_mail(IDMAIL)
-    LOOP
+
     UTL_SMTP.write_data(l_mail_conn, 'Date: ' || TO_CHAR(SYSDATE, 'DD-MON-YYYY HH24:MI:SS') || UTL_TCP.crlf);
     UTL_SMTP.helo(l_mail_conn, l_smtp_host);
     
-    UTL_SMTP.mail(l_mail_conn, p_from); -- TODO
+    UTL_SMTP.mail(l_mail_conn, p_from);
     
-        FOR dest in c_dest(IDMAIL)
-        LOOP
-        UTL_SMTP.rcpt(l_mail_conn, dest.email);
+    UTL_SMTP.rcpt(l_mail_conn, mail);
         
-        IF dest.typedest = 'TO' THEN
+    process_recipients(l_mail_conn, c_mail.destTO);
+    process_recipients(l_mail_conn, c_mail.destCC);
+    process_recipients(l_mail_conn, c_mail.destBCC);
     
-            UTL_SMTP.write_data(l_mail_conn, 'To: ' || dest.email || UTL_TCP.crlf);
-        ELSIF dest.typedest = 'CC' THEN
-             UTL_SMTP.write_data(l_mail_conn, 'CC: ' || REPLACE(p_cc, ',', ';') || UTL_TCP.crlf);
-        
-        END IF;
-        
-        
-        UTL_SMTP.data(l_mail_conn, p_message || UTL_TCP.crlf || UTL_TCP.crlf);
-        UTL_SMTP.quit(l_mail_conn);
-        END LOOP;
-    END LOOP;
+    UTL_SMTP.write_data(l_mail_conn, 'To: ' || c_mail.destTO || UTL_TCP.crlf);
+    IF TRIM(c_mail.destCC) IS NOT NULL THEN
+        UTL_SMTP.write_data(l_mail_conn, 'CC: ' || REPLACE(c_mail.destCC, ',', ';') || UTL_TCP.crlf);        
+    END IF;            
+    IF TRIM(c_mail.destBCC) IS NOT NULL THEN
+        UTL_SMTP.write_data(l_mail_conn, 'BCC: ' || REPLACE(c_mail.destBCC, ',', ';') || UTL_TCP.crlf);
+    END IF;
+    
+    UTL_SMTP.write_data(l_mail_conn, 'From: ' || p_from || UTL_TCP.crlf);  
+    
+    UTL_SMTP.write_data(l_mail_conn, 'Subject: ' || c_mail.object || UTL_TCP.crlf);
+    UTL_SMTP.write_data(l_mail_conn, 'Reply-To: ' || p_from || UTL_TCP.crlf || UTL_TCP.crlf);  
+    
+    UTL_SMTP.write_data(l_mail_conn, c_mail.message || UTL_TCP.crlf || UTL_TCP.crlf);
+    UTL_SMTP.close_data(l_mail_conn);
+
+    UTL_SMTP.quit(l_mail_conn);
     
   EXCEPTION
  WHEN utl_smtp.Transient_Error OR utl_smtp.Permanent_Error then
    raise_application_error(-20000, 'Unable to send mail', TRUE);
 END;
-/
+
+
+
+
+
+
+
+PROCEDURE createMails(
+    mail in RMAIL 
+)
+
+IS 
+mail RMAIL;
 
 BEGIN
-  send_mail(p_to        => 'me@mycompany.com',
-            p_from      => 'admin@mycompany.com',
-            p_message   => 'This is a test message.',
-            p_smtp_host => 'smtp.mycompany.com');
+    INSERT INTO TMAIL
+        (objet, texte, destTo, destCC, destBCC)
+    VALUES
+        (mail.objet,
+        mail.texte,
+        mail.destTo,
+        mail.destCC,
+        mail.destBCC);
+
+END;
+
+
+PROCEDURE checkMail(
+    idMail in INT 
+)
+IS
+EMAIL_EXCEPTION EXCEPTION;
+BEGIN
+    IF utl_smtp.Transient_Error OR utl_smtp.Permanent_Error THEN 
+        RAISE EMAIL_EXCEPTION; 
+    ELSE
+        SELECT id 
+        FROM destinataires
+        WHERE id = idMail;
+    END IF;
+EXCEPTION
+   WHEN EMAIL_EXCEPTION 
+    THEN raise_application_error(-20307, 'Email inconnu', TRUE);
+END;
+
+
+
 END;
 /
